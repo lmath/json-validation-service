@@ -2,7 +2,7 @@ package controllers
 
 import java.util.UUID
 
-import es.SchemaIndex
+import es.ESSchemaIndex
 import javax.inject._
 import play.api._
 import play.api.libs.json.{JsValue, Json}
@@ -12,39 +12,49 @@ import validator.SchemaValidator
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Success
 import ResponseBody._
+import cats.implicits._
+import cats.data.EitherT
 
 @Singleton
-class SchemaController @Inject()(val cc: ControllerComponents, schemaIndex: SchemaIndex)(implicit ec: ExecutionContext) extends AbstractController(cc) {
+class SchemaController @Inject()(val cc: ControllerComponents, schemaIndex: ESSchemaIndex)(implicit ec: ExecutionContext) extends AbstractController(cc) {
 
-  def get(id: String) = Action {
-    schemaIndex.find(id) match {
-      case Right(schema) => Ok(schema)
-      case Left(msg) => BadRequest(asJson(failedGet(id, msg)))
+  def get(id: String) = Action.async {
+    schemaIndex.find(id) map { schemaOrMessage =>
+      schemaOrMessage match {
+        case Right(schema) => Ok(schema)
+        case Left(msg) => BadRequest(asJson(failedGet(id, msg)))
+      }
     }
   }
 
-  def upload(id: String) = Action { implicit request: Request[AnyContent] =>
-    val uploadOrError: Either[String, String] = for {
-      validJson <- maybeJson(request)
-      idAfterUpload <- schemaIndex.insertSchema(validJson, id)
-    } yield idAfterUpload
+  def upload(id: String) = Action.async { implicit request: Request[AnyContent] =>
+    val uploadOrError: EitherT[Future, String, String] = for {
+      validJson <- EitherT(Future(maybeJson(request)))
+      idAfterUpload <- EitherT(schemaIndex.insertSchema(validJson, id))
+    } yield {
+      idAfterUpload
+    }
 
-    uploadOrError match {
-      case Right(id) => Created(asJson(successfulUpload(id)))
-      case Left(message) => BadRequest(asJson(failedUpload(id, message))) //TODO should throw server error if ES fails
+    uploadOrError.value map { result =>
+      result match {
+        case Right(id) => Created(asJson(successfulUpload(id)))
+        case Left(message) => BadRequest(asJson(failedUpload(id, message))) //TODO should throw server error if ES fails
+      }
     }
   }
 
-  def validate(id: String) = Action { implicit request: Request[AnyContent] =>
-    val validateMsg = for {
-      validJson <- maybeJson(request)
-      schema <- schemaIndex.find(id)
-      validateMsg <- SchemaValidator.validate(schema, validJson)
+  def validate(id: String) = Action.async { implicit request: Request[AnyContent] =>
+    val validateMsg: EitherT[Future, String, String] = for {
+      validJson <- EitherT(Future(maybeJson(request)))
+      schema <- EitherT(schemaIndex.find(id))
+      validateMsg <- EitherT(Future(SchemaValidator.validate(schema, validJson)))
     } yield validateMsg
 
-    validateMsg match {
-      case Right(_) => Ok(asJson(successfulValidate(id)))
-      case Left(msg) => BadRequest(asJson(failedValidate(id, msg)))
+    validateMsg.value.map { msg =>
+      msg match {
+        case Right(_) => Ok(asJson(successfulValidate(id)))
+        case Left(err) => BadRequest(asJson(failedValidate(id, err)))
+      }
     }
   }
 

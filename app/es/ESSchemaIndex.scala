@@ -11,17 +11,21 @@ import javax.inject.Singleton
 import play.api.inject.ApplicationLifecycle
 import play.api.libs.json.{JsValue, Json}
 
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
 import play.api.Logger
 
 import scala.util.{Failure, Success, Try}
-
-// we must import the dsl
+import Schema._
 import com.sksamuel.elastic4s.ElasticDsl._
+
+trait SchemaIndex {
+  def insertSchema(schema: JsValue, id: String): Future[Either[String, String]]
+  def find(id: String): Future[Either[String, String]]
+}
 
 //TODO convert to be async
 @Singleton
-class SchemaIndex @Inject()(applicationLifecycle: ApplicationLifecycle) {
+class ESSchemaIndex @Inject()(applicationLifecycle: ApplicationLifecycle)(implicit ec: ExecutionContext) extends SchemaIndex {
 
   val logger: Logger = Logger(this.getClass())
 
@@ -48,40 +52,30 @@ class SchemaIndex @Inject()(applicationLifecycle: ApplicationLifecycle) {
     Future.successful(client.close())
   }
 
-  def insertSchema(schema: JsValue, id: String): Either[String, String] = {
-
-    val resp: Response[IndexResponse] = client.execute {
+  def insertSchema(schema: JsValue, id: String): Future[Either[String, String]] = {
+    val resp: Future[Response[IndexResponse]] = client.execute {
       indexInto(IndexName).fields("schema" -> schema.toString()).id(id).refresh(RefreshPolicy.Immediate) //todo what is refresh policy tbh
-    }.await
+    }
 
-    if(resp.isError)
-      Left("Error inserting schema. Try again later.")
-    else Right(resp.result.id)
+    resp map { respEventually =>
+      if(respEventually.isError)
+        Left("Error inserting schema. Try again later.")
+      else Right(respEventually.result.id)
+    }
   }
 
-  case class Schema(schema: String)
-  case class FoundRecord(_id: String, _source: Schema)
+  def find(id: String): Future[Either[String, String]] = {
+    val searchResponse = client.execute(get(IndexName, id))
 
-  object Schema {
-    implicit val schemaFormatter = Json.format[Schema]
-    implicit val jsonFormatter = Json.format[FoundRecord]
-  }
-
-  def find(id: String): Either[String, String] = {
-
-    import Schema._
-    val searchResponse = client.execute {
-      get(IndexName, id)
-
-    }.await
-
-    if(searchResponse.result.found && searchResponse.body.isDefined) {
-        Try(Json.parse(searchResponse.body.get).as[FoundRecord]) match {
+    searchResponse map { resp =>
+      if(resp.result.found && resp.body.isDefined) {
+        Try(Json.parse(resp.body.get).as[FoundRecord]) match {
           case Success(value) => Right(value._source.schema)
           case Failure(msg) => Left("Found the id in the DB, but it's not a schema!")
         }
-    } else Left(s"Could not find schema with id ${id}")
+      } else Left(s"Could not find schema with id ${id}")
 
+    }
   }
 
 

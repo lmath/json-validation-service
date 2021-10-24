@@ -11,6 +11,7 @@ scalaVersion := "2.13.6"
 libraryDependencies += guice
 libraryDependencies += "org.scalatestplus.play" %% "scalatestplus-play" % "5.0.0" % Test
 libraryDependencies += "com.github.java-json-tools" % "json-schema-validator" % "2.2.14"
+libraryDependencies += "org.typelevel" %% "cats-core" % "2.6.1"
 
 
 val elastic4sVersion = "7.4.0"
