@@ -4,6 +4,7 @@
 //import org.scalatestplus.play.guice._
 //import play.api.test._
 //import play.api.test.Helpers._
+//import scala.concurrent.ExecutionContext.Implicits.global
 //
 ///**
 // * Add your spec here.
@@ -16,7 +17,7 @@
 //  "HomeController GET" should {
 //
 //    "render the index page from a new instance of controller" in {
-//      val controller = new SchemaController(stubControllerComponents())
+//      val controller = new SchemaController(stubControllerComponents(), )
 //      val home = controller.index().apply(FakeRequest(GET, "/"))
 //
 //      status(home) mustBe OK

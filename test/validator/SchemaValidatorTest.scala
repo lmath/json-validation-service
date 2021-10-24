@@ -2,6 +2,7 @@ package validator
 
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import play.api.libs.json.Json
 
 class SchemaValidatorTest extends AnyFlatSpec with Matchers {
   val testSchema =
@@ -39,7 +40,7 @@ class SchemaValidatorTest extends AnyFlatSpec with Matchers {
     """.stripMargin
 
 
-  it should "require json to have nulls removed to be valid against the schema" in {
+  it should "clean json with nulls and still be valid against the schema" in {
 
     val input =
       """
@@ -54,7 +55,7 @@ class SchemaValidatorTest extends AnyFlatSpec with Matchers {
         |}
       """.stripMargin
 
-    SchemaValidator.validate(testSchema, input) shouldBe false
+    SchemaValidator.validate(testSchema, Json.parse(input)).isRight shouldBe true
   }
 
   it should "return true for a cleaned json that is valid against the schema" in {
@@ -69,7 +70,7 @@ class SchemaValidatorTest extends AnyFlatSpec with Matchers {
         |}
       """.stripMargin
 
-    SchemaValidator.validate(testSchema, inputCleaned) shouldBe true
+    SchemaValidator.validate(testSchema, Json.parse(inputCleaned)).isRight shouldBe true
   }
 
   it should "return false for a json not valid against the schema" in {
@@ -86,7 +87,7 @@ class SchemaValidatorTest extends AnyFlatSpec with Matchers {
         |}
       """.stripMargin
 
-    SchemaValidator.validate(testSchema, input) shouldBe false
+    SchemaValidator.validate(testSchema, Json.parse(input)).isLeft shouldBe true
   }
 
 }

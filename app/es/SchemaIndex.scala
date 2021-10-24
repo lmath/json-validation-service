@@ -1,16 +1,20 @@
 package es
 
 import com.google.inject.Inject
-import com.sksamuel.elastic4s.{ElasticClient, ElasticProperties, RequestFailure, RequestSuccess}
+import com.sksamuel.elastic4s._
 import com.sksamuel.elastic4s.http.JavaClient
 import com.sksamuel.elastic4s.requests.common.RefreshPolicy
+import com.sksamuel.elastic4s.requests.get.GetResponse
+import com.sksamuel.elastic4s.requests.indexes.IndexResponse
 import com.sksamuel.elastic4s.requests.mappings.TextField
 import javax.inject.Singleton
 import play.api.inject.ApplicationLifecycle
-import play.api.libs.json.Json
+import play.api.libs.json.{JsValue, Json}
 
 import scala.concurrent.Future
 import play.api.Logger
+
+import scala.util.{Failure, Success, Try}
 
 // we must import the dsl
 import com.sksamuel.elastic4s.ElasticDsl._
@@ -44,10 +48,15 @@ class SchemaIndex @Inject()(applicationLifecycle: ApplicationLifecycle) {
     Future.successful(client.close())
   }
 
-  def insertSchema(schema: String, id: String) = {
-    client.execute {
-      indexInto(IndexName).fields("schema" -> schema).id(id).refresh(RefreshPolicy.Immediate) //todo what is refresh policy tbh
+  def insertSchema(schema: JsValue, id: String): Either[String, String] = {
+
+    val resp: Response[IndexResponse] = client.execute {
+      indexInto(IndexName).fields("schema" -> schema.toString()).id(id).refresh(RefreshPolicy.Immediate) //todo what is refresh policy tbh
     }.await
+
+    if(resp.isError)
+      Left("Error inserting schema. Try again later.")
+    else Right(resp.result.id)
   }
 
   case class Schema(schema: String)
@@ -58,18 +67,21 @@ class SchemaIndex @Inject()(applicationLifecycle: ApplicationLifecycle) {
     implicit val jsonFormatter = Json.format[FoundRecord]
   }
 
-  def find(id: String) = {
+  def find(id: String): Either[String, String] = {
 
     import Schema._
-    val searchResponse: Option[String] = client.execute {
+    val searchResponse = client.execute {
       get(IndexName, id)
 
-    }.await.body
+    }.await
 
-    searchResponse flatMap { resp =>
-      val foundRecord = Json.parse(resp).asOpt[FoundRecord]
-      foundRecord.map(_._source.schema)
-    }
+    if(searchResponse.result.found && searchResponse.body.isDefined) {
+        Try(Json.parse(searchResponse.body.get).as[FoundRecord]) match {
+          case Success(value) => Right(value._source.schema)
+          case Failure(msg) => Left("Found the id in the DB, but it's not a schema!")
+        }
+    } else Left(s"Could not find schema with id ${id}")
+
   }
 
 
