@@ -1,5 +1,6 @@
 name := """json-validation-service"""
 organization := "io.github.lmath"
+maintainer := "lmathie@gmail.com"
 
 version := "1.0-SNAPSHOT"
 
@@ -10,8 +11,11 @@ scalaVersion := "2.13.6"
 libraryDependencies += guice
 libraryDependencies += "org.scalatestplus.play" %% "scalatestplus-play" % "5.0.0" % Test
 
-// Adds additional packages into Twirl
-//TwirlKeys.templateImports += "io.github.lmath.controllers._"
+val elastic4sVersion = "7.4.0"
+libraryDependencies ++= Seq(
+  "com.sksamuel.elastic4s" %% "elastic4s-client-esjava" % elastic4sVersion,
+  "com.sksamuel.elastic4s" %% "elastic4s-testkit" % elastic4sVersion % "test"
+)
 
-// Adds additional packages into conf/routes
-// play.sbt.routes.RoutesKeys.routesImport += "io.github.lmath.binders._"
+
+Global / onChangedBuildSource := ReloadOnSourceChanges
