@@ -10,3 +10,5 @@ GET     /assets/*file               controllers.Assets.versioned(path="/public",
 
 GET     /schema/:SCHEMAID           controllers.SchemaController.get(SCHEMAID: String)
 POST    /schema/:SCHEMAID           controllers.SchemaController.upload(SCHEMAID: String)
+
+POST    /validate/:SCHEMAID         controllers.SchemaController.validate(SCHEMAID: String)

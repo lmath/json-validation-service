@@ -9,14 +9,21 @@ import javax.inject.Singleton
 import play.api.inject.ApplicationLifecycle
 import play.api.libs.json.Json
 
+import scala.concurrent.Future
+import play.api.Logger
 
+// we must import the dsl
+import com.sksamuel.elastic4s.ElasticDsl._
+
+//TODO convert to be async
 @Singleton
-class SchemaIndex @Inject()(applicationLifecycle: ApplicationLifecycle){
+class SchemaIndex @Inject()(applicationLifecycle: ApplicationLifecycle) {
+
+  val logger: Logger = Logger(this.getClass())
+
   // in this example we create a client to a local Docker container at localhost:9200
   val client = ElasticClient(JavaClient(ElasticProperties(s"http://${sys.env.getOrElse("ES_HOST", "127.0.0.1")}:${sys.env.getOrElse("ES_PORT", "9200")}")))
 
-  // we must import the dsl
-  import com.sksamuel.elastic4s.ElasticDsl._
 
   val IndexName = "schemas"
 
@@ -32,10 +39,12 @@ class SchemaIndex @Inject()(applicationLifecycle: ApplicationLifecycle){
     )
   }.await
 
+  applicationLifecycle.addStopHook { () =>
+    logger.info("Shutting down the Elasticsearch client")
+    Future.successful(client.close())
+  }
+
   def insertSchema(schema: String, id: String) = {
-    // Next we index a single document which is just the name of an Artist.
-    // The RefreshPolicy.Immediate means that we want this document to flush to the disk immediately.
-    // see the section on Eventual Consistency.
     client.execute {
       indexInto(IndexName).fields("schema" -> schema).id(id).refresh(RefreshPolicy.Immediate) //todo what is refresh policy tbh
     }.await
@@ -57,10 +66,8 @@ class SchemaIndex @Inject()(applicationLifecycle: ApplicationLifecycle){
 
     }.await.body
 
-    println(searchResponse)
     searchResponse flatMap { resp =>
       val foundRecord = Json.parse(resp).asOpt[FoundRecord]
-      println(foundRecord)
       foundRecord.map(_._source.schema)
     }
   }

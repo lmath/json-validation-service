@@ -7,6 +7,7 @@ import javax.inject._
 import play.api._
 import play.api.libs.json.{JsValue, Json}
 import play.api.mvc._
+import validator.SchemaValidator
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -39,6 +40,15 @@ class SchemaController @Inject()(val cc: ControllerComponents, schemaIndex: Sche
     schemaIndex.insertSchema(schemaAsText, id)
     Ok(schemaAsText)
   }
+
+  def validate(id: String) = Action { implicit request: Request[AnyContent] =>
+    val jsonToCheck = request.body.asText.getOrElse("something went wrong")
+
+    val schema = schemaIndex.find(id).getOrElse("could not find that schema! ")
+    val result = SchemaValidator.validate(schema, jsonToCheck)
+    Ok(result.toString)
+  }
+
   def hi() = Action {
     Ok("HIIII")
   }
