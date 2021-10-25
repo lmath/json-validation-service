@@ -24,7 +24,6 @@ class SchemaController @Inject()(val cc: ControllerComponents, schemaIndex: ESSc
     }
   }
 
-
   private def badRequestOrServerError(id: String, error: ErrorReason, resp: (String, String) => ResponseBody) = error match {
     case ServerError => InternalServerError(asJson(resp(id, error.msg)))
     case err: JsonNotValidAgainstSchema => Ok(asJson(resp(id, err.msg)))

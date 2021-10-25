@@ -1,8 +1,8 @@
 package validator
 
+import com.fasterxml.jackson.databind.JsonNode
 import com.github.fge.jackson.JsonLoader
-import com.github.fge.jsonschema.core.report.{ProcessingMessage, ProcessingReport}
-import com.github.fge.jsonschema.examples.Utils
+import com.github.fge.jsonschema.core.report.ProcessingReport
 import com.github.fge.jsonschema.main.JsonSchemaFactory
 import error.{ErrorReason, JsonNotValidAgainstSchema}
 import play.api.libs.json.{JsValue, Json}
@@ -10,7 +10,7 @@ import play.api.libs.json.{JsValue, Json}
 object SchemaValidator {
 
   def validate(schemaToCheck: String, jsonToCheck: JsValue): Either[ErrorReason, String] = {
-    val schemaAsJsonNode = JsonLoader.fromString(schemaToCheck)
+    val schemaAsJsonNode: JsonNode = JsonLoader.fromString(schemaToCheck)
     val cleanedJson = JsonCleaner.clean(Json.stringify(jsonToCheck))
     val jsonAsJsonNode = JsonLoader.fromString(cleanedJson)
 
