@@ -3,7 +3,7 @@ package controllers
 import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
 import error.{ErrorReason, InvalidJson, SchemaNotFound}
-import es.{ESSchemaIndex, SchemaIndex}
+import es.{ESSchemaIndexClient, SchemaIndexClient}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import play.api.libs.json.{JsValue, Json}
@@ -13,18 +13,12 @@ import play.api.test.Helpers._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 
-/**
- * Add your spec here.
- * You can mock out a whole application including requests, plugins etc.
- *
- * For more information, see https://www.playframework.com/documentation/latest/ScalaTestingWithScalaTest
- */
 class SchemaControllerSpec extends AnyFlatSpec with Matchers {
 
   implicit val materializer = ActorMaterializer()(ActorSystem())
 
-  val alwaysSuccessfulSchemaIndexStub = new AlwaysSuccessfulSchemaIndexStub()
-  val alwaysFailsSchemaIndexStub = new AlwaysFailsSchemaIndexStub()
+  val alwaysSuccessfulSchemaIndexStub = new AlwaysSuccessfulSchemaIndexClientStub()
+  val alwaysFailsSchemaIndexStub = new AlwaysFailsSchemaIndexClientStub()
 
   val invalidJson =
     """
@@ -43,7 +37,7 @@ class SchemaControllerSpec extends AnyFlatSpec with Matchers {
       contentAsString(resp) should include ("{}")
     }
   "GET /schema/:SCHEMAID" should
-    "return not found when the schema is not found" in { //TODO fix me - this needs to be updated to return not found
+    "return not found when the schema is not found" in {
       val controller = new SchemaController(stubControllerComponents(), alwaysFailsSchemaIndexStub)
       val resp = controller.get("correct-horse-battery-staple").apply(FakeRequest(GET, "/schema"))
 
@@ -103,7 +97,7 @@ class SchemaControllerSpec extends AnyFlatSpec with Matchers {
         """
           |{ "type": "string" }
         """.stripMargin
-      val stringsSchemaStub = new AlwaysSuccessfulSchemaIndexStub(stringsOnlySchema)
+      val stringsSchemaStub = new AlwaysSuccessfulSchemaIndexClientStub(stringsOnlySchema)
       val controller = new SchemaController(stubControllerComponents(), stringsSchemaStub)
       val request = FakeRequest(POST, "/validate").withJsonBody(Json.obj()).withHeaders("Content-Type" -> "application/json")
       val resp = controller.validate("correct-horse-battery-staple").apply(request)
@@ -114,13 +108,13 @@ class SchemaControllerSpec extends AnyFlatSpec with Matchers {
   }
 }
 
-class AlwaysSuccessfulSchemaIndexStub(schema: String = "{}") extends ESSchemaIndex {
+class AlwaysSuccessfulSchemaIndexClientStub(schema: String = "{}") extends ESSchemaIndexClient {
   override def insertSchema(schema: JsValue, id: String): Future[Either[ErrorReason, String]] = Future.successful(Right(id))
 
   override def find(id: String): Future[Either[ErrorReason, String]] = Future.successful(Right(schema))
 }
 
-class AlwaysFailsSchemaIndexStub extends ESSchemaIndex {
+class AlwaysFailsSchemaIndexClientStub extends ESSchemaIndexClient {
   override def insertSchema(schema: JsValue, id: String): Future[Either[ErrorReason, String]] = Future.successful(Left(InvalidJson))
 
   override def find(id: String): Future[Either[ErrorReason, String]] = Future.successful(Left(SchemaNotFound))

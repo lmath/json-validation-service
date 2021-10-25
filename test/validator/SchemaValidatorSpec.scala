@@ -4,7 +4,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import play.api.libs.json.Json
 
-class SchemaValidatorTest extends AnyFlatSpec with Matchers {
+class SchemaValidatorSpec extends AnyFlatSpec with Matchers {
   val testSchema =
     """
       |{

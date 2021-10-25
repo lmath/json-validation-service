@@ -3,7 +3,7 @@ package validator
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class JsonCleanerTest extends AnyFlatSpec with Matchers {
+class JsonCleanerSpec extends AnyFlatSpec with Matchers {
 
   it should "remove nulls from a json" in {
     val input =
