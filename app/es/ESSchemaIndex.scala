@@ -25,7 +25,7 @@ trait SchemaIndex {
 
 //TODO convert to be async
 @Singleton
-class ESSchemaIndex @Inject()(applicationLifecycle: ApplicationLifecycle)(implicit ec: ExecutionContext) extends SchemaIndex {
+class ESSchemaIndex @Inject()(implicit ec: ExecutionContext) extends SchemaIndex {
 
   val logger: Logger = Logger(this.getClass())
 
@@ -46,11 +46,6 @@ class ESSchemaIndex @Inject()(applicationLifecycle: ApplicationLifecycle)(implic
       )
     )
   }.await
-
-  applicationLifecycle.addStopHook { () =>
-    logger.info("Shutting down the Elasticsearch client")
-    Future.successful(client.close())
-  }
 
   def insertSchema(schema: JsValue, id: String): Future[Either[String, String]] = {
     val resp: Future[Response[IndexResponse]] = client.execute {

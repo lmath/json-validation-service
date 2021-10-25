@@ -1,19 +1,15 @@
 package controllers
 
-import java.util.UUID
-
+import cats.data.EitherT
+import cats.implicits._
+import controllers.ResponseBody._
 import es.ESSchemaIndex
 import javax.inject._
-import play.api._
 import play.api.libs.json.{JsValue, Json}
 import play.api.mvc._
 import validator.SchemaValidator
 
 import scala.concurrent.{ExecutionContext, Future}
-import scala.util.Success
-import ResponseBody._
-import cats.implicits._
-import cats.data.EitherT
 
 @Singleton
 class SchemaController @Inject()(val cc: ControllerComponents, schemaIndex: ESSchemaIndex)(implicit ec: ExecutionContext) extends AbstractController(cc) {
@@ -21,7 +17,7 @@ class SchemaController @Inject()(val cc: ControllerComponents, schemaIndex: ESSc
   def get(id: String) = Action.async {
     schemaIndex.find(id) map { schemaOrMessage =>
       schemaOrMessage match {
-        case Right(schema) => Ok(schema)
+        case Right(schema) => Ok(Json.parse(schema))
         case Left(msg) => BadRequest(asJson(failedGet(id, msg)))
       }
     }
