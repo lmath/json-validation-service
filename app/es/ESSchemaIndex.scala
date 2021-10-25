@@ -17,13 +17,14 @@ import play.api.Logger
 import scala.util.{Failure, Success, Try}
 import Schema._
 import com.sksamuel.elastic4s.ElasticDsl._
+import error.{ErrorReason, SchemaNotFound, ServerError}
 
 trait SchemaIndex {
-  def insertSchema(schema: JsValue, id: String): Future[Either[String, String]]
-  def find(id: String): Future[Either[String, String]]
+  def insertSchema(schema: JsValue, id: String): Future[Either[ErrorReason, String]]
+  def find(id: String): Future[Either[ErrorReason, String]]
 }
 
-//TODO convert to be async
+
 @Singleton
 class ESSchemaIndex @Inject()(implicit ec: ExecutionContext) extends SchemaIndex {
 
@@ -47,28 +48,34 @@ class ESSchemaIndex @Inject()(implicit ec: ExecutionContext) extends SchemaIndex
     )
   }.await
 
-  def insertSchema(schema: JsValue, id: String): Future[Either[String, String]] = {
+  def insertSchema(schema: JsValue, id: String): Future[Either[ErrorReason, String]] = {
     val resp: Future[Response[IndexResponse]] = client.execute {
       indexInto(IndexName).fields("schema" -> schema.toString()).id(id).refresh(RefreshPolicy.Immediate) //todo what is refresh policy tbh
     }
 
     resp map { respEventually =>
       if(respEventually.isError)
-        Left("Error inserting schema. Try again later.")
+        Left(ServerError)
       else Right(respEventually.result.id)
     }
   }
 
-  def find(id: String): Future[Either[String, String]] = {
+  def find(id: String): Future[Either[ErrorReason, String]] = {
     val searchResponse = client.execute(get(IndexName, id))
 
     searchResponse map { resp =>
       if(resp.result.found && resp.body.isDefined) {
         Try(Json.parse(resp.body.get).as[FoundRecord]) match {
           case Success(value) => Right(value._source.schema)
-          case Failure(msg) => Left("Found the id in the DB, but it's not a schema!")
+          case Failure(msg) => {
+            logger.warn(s"We looked for ${id} and found it, but it doesn't seem to be a schema.")
+            Left(ServerError)
+          }
         }
-      } else Left(s"Could not find schema with id ${id}")
+      } else {
+        logger.info(s"Could not find schema with id ${id}")
+        Left(SchemaNotFound)
+      }
 
     }
   }

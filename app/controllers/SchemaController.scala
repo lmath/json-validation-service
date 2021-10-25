@@ -8,6 +8,7 @@ import javax.inject._
 import play.api.libs.json.{JsValue, Json}
 import play.api.mvc._
 import validator.SchemaValidator
+import error._
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -18,29 +19,38 @@ class SchemaController @Inject()(val cc: ControllerComponents, schemaIndex: ESSc
     schemaIndex.find(id) map { schemaOrMessage =>
       schemaOrMessage match {
         case Right(schema) => Ok(Json.parse(schema))
-        case Left(msg) => BadRequest(asJson(failedGet(id, msg)))
+        case Left(error) => badRequestOrServerError(id, error, failedGet)
       }
     }
   }
 
+
+  private def badRequestOrServerError(id: String, error: ErrorReason, resp: (String, String) => ResponseBody) = error match {
+    case ServerError => InternalServerError(asJson(resp(id, error.msg)))
+    case err: JsonNotValidAgainstSchema => Ok(asJson(resp(id, err.msg)))
+    case SchemaNotFound => NotFound(asJson(resp(id, error.msg)))
+    case _ => BadRequest(asJson(resp(id, error.msg)))
+  }
+
+
   def upload(id: String) = Action.async { implicit request: Request[AnyContent] =>
-    val uploadOrError: EitherT[Future, String, String] = for {
+    val uploadOrError: EitherT[Future, ErrorReason, String] = for {
       validJson <- EitherT(Future(maybeJson(request)))
       idAfterUpload <- EitherT(schemaIndex.insertSchema(validJson, id))
     } yield {
       idAfterUpload
     }
 
-    uploadOrError.value map { result =>
+    uploadOrError.value map { result: Either[ErrorReason, String] =>
       result match {
         case Right(id) => Created(asJson(successfulUpload(id)))
-        case Left(message) => BadRequest(asJson(failedUpload(id, message))) //TODO should throw server error if ES fails
+        case Left(error) => badRequestOrServerError(id, error, failedUpload)
       }
     }
   }
 
   def validate(id: String) = Action.async { implicit request: Request[AnyContent] =>
-    val validateMsg: EitherT[Future, String, String] = for {
+    val validateMsg: EitherT[Future, ErrorReason, String] = for {
       validJson <- EitherT(Future(maybeJson(request)))
       schema <- EitherT(schemaIndex.find(id))
       validateMsg <- EitherT(Future(SchemaValidator.validate(schema, validJson)))
@@ -49,15 +59,15 @@ class SchemaController @Inject()(val cc: ControllerComponents, schemaIndex: ESSc
     validateMsg.value.map { msg =>
       msg match {
         case Right(_) => Ok(asJson(successfulValidate(id)))
-        case Left(err) => BadRequest(asJson(failedValidate(id, err)))
+        case Left(err) => badRequestOrServerError(id, err, failedValidate)
       }
     }
   }
 
-  private def maybeJson(request: Request[AnyContent]): Either[String, JsValue] = {
+  private def maybeJson(request: Request[AnyContent]): Either[ErrorReason, JsValue] = {
     request.body.asJson match {
       case Some(body) => Right(body)
-      case None => Left("Invalid json or missing header Content-Type:application/json")
+      case None => Left(InvalidJson)
     }
   }
 
